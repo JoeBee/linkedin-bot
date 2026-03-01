@@ -107,6 +107,7 @@ playwright-report/
 test-results/
 screenshots/
 videos/
+debug-screenshot.png
 
 # Database
 *.sqlite

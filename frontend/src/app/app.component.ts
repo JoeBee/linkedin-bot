@@ -9,7 +9,6 @@ import {
 } from './services/bot-api.service';
 
 // Import credentials from local environment file
-// Create environment.local.ts from environment.local.example.ts
 import { environmentLocal } from '../environments/environment.local';
 
 @Component({

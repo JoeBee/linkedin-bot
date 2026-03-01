@@ -10,22 +10,15 @@ This project uses Google Gemini AI, which requires an API key. The API key is st
 
 #### 1. Create your backend `.env` file
 
-Copy the example file:
-
-```bash
-cd backend
-cp .env.example .env
-```
-
-#### 2. Add your API key
-
-Edit `backend/.env` and add your Gemini API key:
+Create a new file at `backend/.env` with the following content:
 
 ```env
+PORT=3000
+HEADLESS=false
 GEMINI_API_KEY=your_actual_api_key_here
 ```
 
-#### 3. Get your API key
+#### 2. Get your API key
 
 1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Sign in with your Google account
@@ -36,16 +29,7 @@ GEMINI_API_KEY=your_actual_api_key_here
 
 #### 1. Create your local environment file
 
-Copy the example file:
-
-```bash
-cd frontend/src/environments
-cp environment.local.example.ts environment.local.ts
-```
-
-#### 2. Add your LinkedIn credentials
-
-Edit `frontend/src/environments/environment.local.ts`:
+Create a new file at `frontend/src/environments/environment.local.ts` with the following content:
 
 ```typescript
 export const environmentLocal = {
@@ -62,8 +46,7 @@ export const environmentLocal = {
 
 - API keys are stored in `.env` files
 - `.env` files are excluded via `.gitignore`
-- Example files (`.env.example`) don't contain real keys
-- Documentation references `.env` without exposing keys
+- Documentation provides clear setup instructions
 
 ### ❌ What to NEVER do
 

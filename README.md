@@ -14,8 +14,7 @@ A bot that uses **browser automation** (Playwright) to log into LinkedIn and int
 ```bash
 cd backend
 npm install
-cp .env.example .env
-# Edit .env if you want (e.g. PORT, HEADLESS=false to see the browser)
+# Create .env file with your configuration (see SECURITY.md for details)
 npm run dev
 ```
 
@@ -72,8 +71,7 @@ linkedin-bot/
 │   │   ├── index.ts
 │   │   ├── linkedin/automation.ts
 │   │   └── routes/
-│   ├── package.json
-│   └── .env.example
+│   └── package.json
 ├── frontend/                # Angular app
 │   └── ...
 └── README.md
