@@ -1,0 +1,247 @@
+<div class="app">
+  @if (loading) {
+    <div class="loading-overlay" aria-live="polite">
+      <div class="spinner"></div>
+      <span class="loading-text">Loading…</span>
+    </div>
+  }
+
+  <header>
+    <h1>LinkedIn Messaging Bot</h1>
+    <div class="header-controls">
+      <p class="status">Status: <strong>{{ statusMessage }}</strong></p>
+    </div>
+  </header>
+
+  @if (error) {
+    <div class="message error">{{ error }}</div>
+  }
+  @if (success) {
+    <div class="message success">{{ success }}</div>
+  }
+
+  @if (state.status === 'idle' || state.status === 'error') {
+    <section class="card">
+      <h2>Login</h2>
+      <p class="hint">Your credentials are sent only to your local backend. A browser window will open to log into LinkedIn.</p>
+      <div class="form">
+        <input type="email" placeholder="LinkedIn email" [(ngModel)]="email" />
+        <div class="password-wrap">
+          <input
+            [type]="passwordVisible ? 'text' : 'password'"
+            placeholder="Password"
+            [(ngModel)]="password"
+          />
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="passwordVisible = !passwordVisible"
+            [attr.aria-label]="passwordVisible ? 'Hide password' : 'Show password'"
+            title="{{ passwordVisible ? 'Hide password' : 'Show password' }}"
+          >
+            @if (passwordVisible) {
+              <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            } @else {
+              <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            }
+          </button>
+        </div>
+        <button (click)="login()" [disabled]="loading">Login</button>
+      </div>
+    </section>
+  }
+
+  @if (state.status === 'ready' || state.status === 'logging_in') {
+    <div class="main-layout">
+      <section class="card conversations-panel">
+        <h2>Conversations</h2>
+        <div class="actions">
+          <button (click)="refresh()" [disabled]="loading">Refresh conversations</button>
+          <button (click)="logout()" [disabled]="loading" class="secondary">Logout</button>
+        </div>
+        @if (state.conversations.length > 0) {
+          <div class="conversation-filter">
+            <div class="filter-buttons">
+              <button
+                type="button"
+                class="filter-btn"
+                [class.active]="conversationFilter === 'all'"
+                (click)="conversationFilter = 'all'"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                class="filter-btn"
+                [class.active]="conversationFilter === 'unread'"
+                (click)="conversationFilter = 'unread'"
+              >
+                Unread
+              </button>
+              <div class="headless-toggle" style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.9rem; color: #666;">HEADLESS</span>
+                <label class="toggle-switch">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="headless"
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="filter-search-wrap">
+              <input
+                type="text"
+                class="filter-search"
+                placeholder="Search conversations..."
+                [(ngModel)]="filterText"
+              />
+              @if (filterText) {
+                <button
+                  type="button"
+                  class="filter-clear"
+                  (click)="filterText = ''"
+                  aria-label="Clear search"
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              }
+            </div>
+          </div>
+          <ul class="conversations">
+            @for (c of filteredConversations; track c.id) {
+              <li [class.unread]="c.unread" [class.selected]="selectedConversation?.id === c.id">
+                <button (click)="openConv(c)" [disabled]="loading">
+                  <span class="name">{{ c.name }}</span>
+                  <span class="preview">{{ c.preview }}</span>
+                </button>
+              </li>
+            }
+            </ul>
+          @if (filteredConversations.length === 0 && (filterText || conversationFilter === 'unread')) {
+            <p class="hint">No conversations match your filter.</p>
+          }
+        } @else {
+          <p class="hint">Click "Refresh conversations" to load your messaging threads.</p>
+        }
+      </section>
+
+      <div class="right-panel">
+        @if (selectedConversation) {
+          <section class="card send-message-card">
+            <h2>Send message</h2>
+            <p class="hint">Type your reply or generate one with AI.</p>
+            <div class="form">
+              <textarea
+                placeholder="Type your message..."
+                [(ngModel)]="messageText"
+                [rows]="textareaRows"
+              ></textarea>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button 
+                  (click)="generateAiReply()" 
+                  [disabled]="loading || !threadMessages.length"
+                  class="secondary"
+                  title="Generate AI reply based on conversation context"
+                >
+                  🤖 Generate AI Reply
+                </button>
+                <button (click)="send()" [disabled]="loading || !messageText.trim()">
+                  Send
+                </button>
+              </div>
+            </div>
+          </section>
+          <section class="card selected-conversation-card">
+            <h2>Selected conversation</h2>
+            <div class="selected-conversation-header">
+              <div class="selected-name">{{ selectedConversation.name }}</div>
+              @if (selectedConversation.unread) {
+                <span class="unread-badge">Unread</span>
+              }
+            </div>
+            <div class="thread-messages">
+              @if (threadMessages.length > 0) {
+                <div class="thread-messages-header">
+                  <span class="thread-col-message">Message</span>
+                  <span class="thread-col-time">Date/Time</span>
+                </div>
+                @for (msg of reversedThreadMessages; track $index) {
+                  <div class="thread-message-row" [class.from-me]="msg.fromMe">
+                    <div class="thread-message">{{ msg.text }}</div>
+                    <div class="thread-timestamp">{{ msg.timestamp || '—' }}</div>
+                  </div>
+                }
+              } @else {
+                <p class="hint">No messages loaded. The thread may still be loading.</p>
+              }
+            </div>
+          </section>
+        } @else {
+          <section class="card right-panel-placeholder">
+            <p class="hint">Select a conversation to view and respond.</p>
+          </section>
+        }
+      </div>
+    </div>
+
+    @if (diagnostics) {
+      <div class="diagnostics-fullwidth">
+      <section class="card diagnostics-card">
+        <h2>
+          <button type="button" class="diagnostics-toggle" (click)="toggleDiagnostics()">
+            Debug Diagnostics {{ diagnosticsExpanded ? '▼' : '▶' }}
+          </button>
+          <button type="button" class="diag-copy-btn" (click)="copyDiagnostics($event)" title="Copy all">
+            <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </h2>
+        @if (diagnosticsExpanded) {
+          <div class="diagnostics-content">
+            <div class="diagnostics-row"><strong>Race winner:</strong> {{ diagnostics.raceWinner }}</div>
+            <div class="diagnostics-row"><strong>Parse path:</strong> {{ diagnostics.parsePathUsed ?? '—' }}</div>
+            <div class="diagnostics-row"><strong>Parsed count:</strong> {{ diagnostics.parsedCount }}</div>
+            @if (diagnostics.apiUrl) {
+              <div class="diagnostics-row"><strong>API URL:</strong> <code class="diag-code">{{ diagnostics.apiUrl }}</code></div>
+            }
+            @if (diagnostics.rawApiTopKeys && diagnostics.rawApiTopKeys.length) {
+              <div class="diagnostics-row"><strong>Top keys:</strong> {{ diagnostics.rawApiTopKeys.join(', ') }}</div>
+            }
+            @if (diagnostics.rawApiStructure) {
+              <div class="diagnostics-row"><strong>Structure:</strong> <code class="diag-code">{{ diagnostics.rawApiStructure }}</code></div>
+            }
+            @if (diagnostics.domSummary) {
+              <div class="diagnostics-section">
+                <div class="diagnostics-section-header">
+                  <strong>DOM:</strong>
+                  <button type="button" class="diag-copy-btn" (click)="copySection($event, 'dom')" title="Copy">Copy</button>
+                </div>
+                threadLinks={{ diagnostics.domSummary.threadLinks }}, messagingLinks={{ diagnostics.domSummary.messagingLinks }}, inboxLinks={{ diagnostics.domSummary.inboxLinks }}, hasSkeleton={{ diagnostics.domSummary.hasSkeleton }}, hasMessagingHeader={{ diagnostics.domSummary.hasMessagingHeader }}
+              </div>
+            }
+            @if (diagnostics.voyagerUrlsSeen && diagnostics.voyagerUrlsSeen.length) {
+              <div class="diagnostics-section">
+                <div class="diagnostics-section-header">
+                  <strong>Voyager URLs ({{ diagnostics.voyagerUrlsSeen.length }}):</strong>
+                  <button type="button" class="diag-copy-btn" (click)="copySection($event, 'voyager')" title="Copy">Copy</button>
+                </div>
+                <pre class="diag-pre">{{ diagnostics.voyagerUrlsSeen.slice(0, 10).join('\n') }}</pre>
+              </div>
+            }
+            @if (diagnostics.rawApiResponse) {
+              <div class="diagnostics-section">
+                <div class="diagnostics-section-header">
+                  <strong>Raw API response (schema):</strong>
+                  <button type="button" class="diag-copy-btn" (click)="copySection($event, 'rawApi')" title="Copy">Copy</button>
+                </div>
+                <pre class="diag-pre">{{ rawApiJson }}</pre>
+              </div>
+            }
+          </div>
+        }
+      </section>
+      </div>
+    }
+  }
+</div>
