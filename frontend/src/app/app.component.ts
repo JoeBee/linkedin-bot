@@ -17,8 +17,8 @@ import {
 })
 export class AppComponent {
   state: BotState = { status: 'idle', conversations: [] };
-  email = '';
-  password = '';
+  email = 'Joe@bcjj.com';
+  password = 'limoose';
   passwordVisible = false;
   headless = false;
   messageText = '';
@@ -33,9 +33,14 @@ export class AppComponent {
   conversationFilter: 'all' | 'unread' = 'all';
   filterText = '';
   statusMessage = 'Idle';  // Detailed status message
+  activeTab: 'conversations' | 'jobs' | 'notifications' = 'conversations';
 
   constructor(private api: BotApiService) {
     this.pollStatus();
+  }
+
+  setActiveTab(tab: 'conversations' | 'jobs' | 'notifications'): void {
+    this.activeTab = tab;
   }
 
   pollStatus(): void {

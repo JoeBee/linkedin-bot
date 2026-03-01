@@ -20,7 +20,8 @@ A complete AI-powered message generation system using Google Gemini AI that anal
    - Returns AI-generated reply text
 
 3. **Modified: `backend/.env`**
-   - Added: `GEMINI_API_KEY=AIzaSyB0QDGDo3jvmLfJ51-fQ4zSfSnexlYM5RY`
+   - Added: `GEMINI_API_KEY=<your_api_key_here>`
+   - Note: This file is excluded from Git via `.gitignore`
 
 4. **Modified: `backend/package.json`**
    - Added dependency: `@google/generative-ai`

@@ -7,7 +7,7 @@ Your Google Gemini AI integration is now **100% functional** and ready to use!
 ## ✅ What's Working
 
 ### API Configuration
-- ✅ API Key: `AIzaSyB0QDGDo3jvmLfJ51-fQ4zSfSnexlYM5RY` 
+- ✅ API Key: Configured in `backend/.env` file (not committed to Git)
 - ✅ Project: `gen-lang-client-0704806632` (Gemini Project)
 - ✅ Model: `gemini-2.5-flash` (Latest and fastest!)
 - ✅ Tier: Free tier with generous limits

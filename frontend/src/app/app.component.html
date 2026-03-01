@@ -52,6 +52,31 @@
   }
 
   @if (state.status === 'ready' || state.status === 'logging_in') {
+    <div class="tabs">
+      <button 
+        class="tab-button" 
+        [class.active]="activeTab === 'conversations'"
+        (click)="setActiveTab('conversations')"
+      >
+        Conversations
+      </button>
+      <button 
+        class="tab-button" 
+        [class.active]="activeTab === 'jobs'"
+        (click)="setActiveTab('jobs')"
+      >
+        Jobs
+      </button>
+      <button 
+        class="tab-button" 
+        [class.active]="activeTab === 'notifications'"
+        (click)="setActiveTab('notifications')"
+      >
+        Notifications
+      </button>
+    </div>
+
+    @if (activeTab === 'conversations') {
     <div class="main-layout">
       <section class="card conversations-panel">
         <h2>Conversations</h2>
@@ -185,6 +210,25 @@
         }
       </div>
     </div>
+    }
+
+    @if (activeTab === 'jobs') {
+      <div class="tab-content">
+        <section class="card">
+          <h2>Jobs</h2>
+          <p class="hint">Job search and applications will be displayed here.</p>
+        </section>
+      </div>
+    }
+
+    @if (activeTab === 'notifications') {
+      <div class="tab-content">
+        <section class="card">
+          <h2>Notifications</h2>
+          <p class="hint">LinkedIn notifications will be displayed here.</p>
+        </section>
+      </div>
+    }
 
     @if (diagnostics) {
       <div class="diagnostics-fullwidth">

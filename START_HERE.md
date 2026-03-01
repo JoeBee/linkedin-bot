@@ -4,8 +4,8 @@
 
 ### What Just Happened
 
-I successfully integrated Google Gemini AI into your LinkedIn bot with your API key and project:
-- **API Key**: AIzaSyB0QDGDo3jvmLfJ51-fQ4zSfSnexlYM5RY ✅
+I successfully integrated Google Gemini AI into your LinkedIn bot:
+- **API Key**: Configured in `.env` file ✅
 - **Project**: gen-lang-client-0704806632 ✅
 - **Model**: gemini-2.5-flash (latest!) ✅
 
