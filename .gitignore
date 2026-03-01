@@ -42,6 +42,9 @@ build/
 .ng_build/
 .ng_pkg_build/
 
+# Angular environment files with credentials
+**/environment.local.ts
+
 # Compiled output
 /dist
 /tmp

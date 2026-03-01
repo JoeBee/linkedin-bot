@@ -6,7 +6,9 @@ This project uses Google Gemini AI, which requires an API key. The API key is st
 
 ## Setup Instructions
 
-### 1. Create your `.env` file
+### Backend Setup
+
+#### 1. Create your backend `.env` file
 
 Copy the example file:
 
@@ -15,7 +17,7 @@ cd backend
 cp .env.example .env
 ```
 
-### 2. Add your API key
+#### 2. Add your API key
 
 Edit `backend/.env` and add your Gemini API key:
 
@@ -23,12 +25,36 @@ Edit `backend/.env` and add your Gemini API key:
 GEMINI_API_KEY=your_actual_api_key_here
 ```
 
-### 3. Get your API key
+#### 3. Get your API key
 
 1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Sign in with your Google account
 3. Click "Create API Key"
 4. Copy the key and paste it into your `.env` file
+
+### Frontend Setup
+
+#### 1. Create your local environment file
+
+Copy the example file:
+
+```bash
+cd frontend/src/environments
+cp environment.local.example.ts environment.local.ts
+```
+
+#### 2. Add your LinkedIn credentials
+
+Edit `frontend/src/environments/environment.local.ts`:
+
+```typescript
+export const environmentLocal = {
+  defaultEmail: 'your_linkedin_email@example.com',
+  defaultPassword: 'your_linkedin_password',
+};
+```
+
+**Note:** These credentials are only used to pre-fill the login form for convenience. They are stored locally and never committed to Git.
 
 ## Security Best Practices
 
@@ -50,7 +76,13 @@ GEMINI_API_KEY=your_actual_api_key_here
 
 The following files are automatically excluded from Git:
 
-- `backend/.env` - Contains your actual API key
+**Backend:**
+- `backend/.env` - Contains your API key
+
+**Frontend:**
+- `frontend/src/environments/environment.local.ts` - Contains your LinkedIn credentials
+
+**Other sensitive files:**
 - `.env` - Any environment files
 - `*.env` - All environment file variants
 - `secrets.json` - Any secret configuration files
@@ -58,24 +90,31 @@ The following files are automatically excluded from Git:
 
 ## Verifying Security
 
-Check that your `.env` file is ignored:
+### Check Backend .env
 
 ```bash
 git status backend/.env
 ```
 
-If Git shows "nothing to commit", your `.env` is properly ignored. ✅
+### Check Frontend environment.local.ts
 
-If Git shows the file as "untracked" or "modified", check your `.gitignore`. ❌
+```bash
+git status frontend/src/environments/environment.local.ts
+```
 
-## What if I accidentally committed my API key?
+If Git shows "nothing to commit" or "Untracked files" for these files, they are properly ignored. ✅
 
-If you accidentally committed your API key:
+If Git shows the file as staged or to be committed, check your `.gitignore`. ❌
+
+## What if I accidentally committed my credentials?
+
+If you accidentally committed your API key or credentials:
 
 1. **Immediately rotate your API key** at [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Update your `backend/.env` with the new key
-3. Remove the key from Git history (advanced - seek help if needed)
-4. Never use the exposed key again
+2. **Change your LinkedIn password** if it was committed
+3. Update your local files (`backend/.env` and `frontend/src/environments/environment.local.ts`) with new credentials
+4. Remove the credentials from Git history (advanced - seek help if needed)
+5. Never use the exposed credentials again
 
 ## Environment Variables Reference
 
@@ -91,6 +130,18 @@ HEADLESS=false  # Set to "true" to hide browser window
 # AI Configuration
 GEMINI_API_KEY=your_api_key_here  # Get from https://makersuite.google.com/app/apikey
 ```
+
+### Frontend (`frontend/src/environments/environment.local.ts`)
+
+```typescript
+// Local environment configuration
+export const environmentLocal = {
+  defaultEmail: 'your_linkedin_email@example.com',
+  defaultPassword: 'your_linkedin_password',
+};
+```
+
+**Note:** The frontend credentials are only used to pre-fill the login form. The actual LinkedIn login happens through the backend using Playwright automation.
 
 ## Additional Resources
 

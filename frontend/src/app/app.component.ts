@@ -8,6 +8,10 @@ import {
   RefreshDiagnostics,
 } from './services/bot-api.service';
 
+// Import credentials from local environment file
+// Create environment.local.ts from environment.local.example.ts
+import { environmentLocal } from '../environments/environment.local';
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -17,8 +21,8 @@ import {
 })
 export class AppComponent {
   state: BotState = { status: 'idle', conversations: [] };
-  email = 'Joe@bcjj.com';
-  password = 'limoose';
+  email = environmentLocal.defaultEmail;
+  password = environmentLocal.defaultPassword;
   passwordVisible = false;
   headless = false;
   messageText = '';
