@@ -32,7 +32,7 @@ export interface RefreshDiagnostics {
     inboxLinks: number;
     hasSkeleton: boolean;
     hasMessagingHeader: boolean;
-    linkInfo?: Array<{ href: string | null; text: string; parentTag: string; parentClass: string }>;
+    linkInfo?: Array<{ href: string | null; text: string; parentTag: string | undefined; parentClass: string | undefined }>;
   };
   voyagerUrlsSeen?: string[];
 }

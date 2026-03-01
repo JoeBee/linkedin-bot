@@ -13,6 +13,9 @@ export async function generateReply(
   conversationHistory: ConversationMessage[],
   recipientName: string
 ): Promise<string> {
+  console.log('[AI Service] GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
+  console.log('[AI Service] GEMINI_API_KEY prefix:', process.env.GEMINI_API_KEY?.substring(0, 15) + '...');
+  
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY not configured in environment');
   }

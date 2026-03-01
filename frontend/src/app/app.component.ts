@@ -24,7 +24,7 @@ export class AppComponent {
   email = environmentLocal.defaultEmail;
   password = environmentLocal.defaultPassword;
   passwordVisible = false;
-  headless = false;
+  headless = true;
   messageText = '';
   textareaRows = 3;
   loading = false;
@@ -105,15 +105,15 @@ export class AppComponent {
   }
 
   private autoSelectOksana(): void {
-    // Find Oksana Lysenko's conversation (name format: "Oksana Lysenko, Joseph Beyer" or similar)
+    // Find Oksana's conversation (handle different spellings: Lysenko or Lynsesnko)
     const oksana = this.state.conversations.find(c => {
       const nameLower = c.name.toLowerCase();
-      return nameLower.includes('oksana') && nameLower.includes('lysenko');
+      return nameLower.includes('oksana') && (nameLower.includes('lysenko') || nameLower.includes('lynsesnko'));
     });
 
     if (oksana) {
-      console.log('[Auto-select] Found Oksana Lysenko:', oksana.name);
-      console.log('[Auto-select] Opening conversation and will auto-generate...');
+      console.log('[Auto-select] Found Oksana:', oksana.name);
+      console.log('[Auto-select] Opening conversation to check if auto-generate is needed...');
 
       // Open the conversation
       this.error = '';
@@ -130,18 +130,31 @@ export class AppComponent {
           this.threadMessages = (res.messages ?? []).map((m) =>
             typeof m === 'string' ? { text: m } : { text: m.text, timestamp: m.timestamp, fromMe: m.fromMe }
           );
-          this.success = `Opened conversation with ${oksana.name}. Auto-generating reply...`;
+          this.success = `Opened conversation with ${oksana.name}.`;
           this.statusMessage = `Conversation with ${oksana.name} - ${this.threadMessages.length} messages loaded`;
           this.loading = false;
 
-          // NOW auto-generate - messages are definitely loaded
-          console.log('[Auto-select] Messages loaded, auto-generating AI reply...');
-          console.log('[Auto-select] Thread messages count:', this.threadMessages.length);
+          // Check if the most recent message is from Oksana (not from me)
+          if (this.threadMessages.length > 0) {
+            const mostRecentMessage = this.threadMessages[this.threadMessages.length - 1];
+            const isFromOksana = !mostRecentMessage.fromMe;
 
-          // Small delay to ensure UI is updated
-          setTimeout(() => {
-            this.generateAiReply();
-          }, 500);
+            console.log('[Auto-select] Most recent message fromMe:', mostRecentMessage.fromMe);
+            console.log('[Auto-select] Is from Oksana:', isFromOksana);
+
+            if (isFromOksana) {
+              console.log('[Auto-select] Most recent message is from Oksana - auto-generating AI reply...');
+              this.success = `Opened conversation with ${oksana.name}. Auto-generating reply...`;
+
+              // Small delay to ensure UI is updated
+              setTimeout(() => {
+                this.generateAiReply();
+              }, 500);
+            } else {
+              console.log('[Auto-select] Most recent message is from me - skipping auto-generate');
+              this.success = `Opened conversation with ${oksana.name}. Last message was from you.`;
+            }
+          }
         },
         error: (err) => {
           console.log('[Auto-select] Error opening conversation:', err);
@@ -151,7 +164,7 @@ export class AppComponent {
         },
       });
     } else {
-      console.log('[Auto-select] Oksana Lysenko not found in conversations');
+      console.log('[Auto-select] Oksana not found in conversations');
       console.log('[Auto-select] Available conversations:', this.state.conversations.map(c => c.name).join(', '));
     }
   }
