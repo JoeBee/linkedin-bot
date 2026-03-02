@@ -6,6 +6,7 @@ import {
   BotState,
   ConversationSummary,
   RefreshDiagnostics,
+  JobListing,
 } from './services/bot-api.service';
 
 // Import credentials from local environment file
@@ -19,7 +20,7 @@ import { environmentLocal } from '../environments/environment.local';
   styleUrl: './app.component.css',
 })
 export class AppComponent {
-  state: BotState = { status: 'idle', conversations: [] };
+  state: BotState = { status: 'idle', conversations: [], jobs: [] };
   email = environmentLocal.defaultEmail;
   password = environmentLocal.defaultPassword;
   passwordVisible = false;
@@ -35,21 +36,104 @@ export class AppComponent {
   threadMessages: Array<{ text: string; timestamp?: string; fromMe?: boolean }> = [];
   conversationFilter: 'all' | 'unread' = 'all';
   filterText = '';
-  statusMessage = 'Idle';  // Detailed status message
-  activeTab: 'conversations' | 'jobs' | 'notifications' = 'conversations';
+  statusMessage = 'Idle';
+  activeTab: 'conversations' | 'jobs' | 'appliedJobs' = 'conversations';
+
+  // Jobs tab state
+  jobSearchKeywords = 'pet sitting';
+  jobLocation = 'Concord, MA';
+  jobDistance = 20;
+  easyApplyOnly = true;
+  generativeAIFilter = false;
+  filtersExpanded = true;
+
+  // Experience level filters
+  experienceInternship = false;
+  experienceEntryLevel = true;
+  experienceAssociate = false;
+  experienceMidSenior = true;
+  experienceDirector = true;
+  experienceExecutive = true;
+
+  // Job type filters
+  jobTypeFullTime = true;
+  jobTypePartTime = true;
+  jobTypeContract = true;
+  jobTypeTemporary = true;
+  jobTypeVolunteer = false;
+  jobTypeInternship = false;
+
+  // Work location filters
+  workOnSite = true;
+  workRemote = true;
+  workHybrid = true;
+
+  // Date posted filter
+  datePosted = 'r604800'; // Past week
+
+  // Salary filter
+  salaryMin = ''; // Any
+
+  // Under 10 applicants
+  under10Applicants = true;
+
+  selectedJob: JobListing | null = null;
+  showJobDetailsDialog = false;
+  appliedJobs: JobListing[] = [];
 
   constructor(private api: BotApiService) {
     this.pollStatus();
   }
 
-  setActiveTab(tab: 'conversations' | 'jobs' | 'notifications'): void {
+  setActiveTab(tab: 'conversations' | 'jobs' | 'appliedJobs'): void {
     this.activeTab = tab;
+    if (tab === 'appliedJobs') {
+      this.loadAppliedJobs();
+    }
+  }
+
+  toggleFilters(): void {
+    this.filtersExpanded = !this.filtersExpanded;
+  }
+
+  toggleAllExperience(): void {
+    const allChecked = this.experienceInternship && this.experienceEntryLevel &&
+      this.experienceAssociate && this.experienceMidSenior &&
+      this.experienceDirector && this.experienceExecutive;
+    const newValue = !allChecked;
+    this.experienceInternship = newValue;
+    this.experienceEntryLevel = newValue;
+    this.experienceAssociate = newValue;
+    this.experienceMidSenior = newValue;
+    this.experienceDirector = newValue;
+    this.experienceExecutive = newValue;
+  }
+
+  toggleAllJobType(): void {
+    const allChecked = this.jobTypeFullTime && this.jobTypePartTime &&
+      this.jobTypeContract && this.jobTypeTemporary &&
+      this.jobTypeVolunteer && this.jobTypeInternship;
+    const newValue = !allChecked;
+    this.jobTypeFullTime = newValue;
+    this.jobTypePartTime = newValue;
+    this.jobTypeContract = newValue;
+    this.jobTypeTemporary = newValue;
+    this.jobTypeVolunteer = newValue;
+    this.jobTypeInternship = newValue;
+  }
+
+  toggleAllWorkLocation(): void {
+    const allChecked = this.workOnSite && this.workRemote && this.workHybrid;
+    const newValue = !allChecked;
+    this.workOnSite = newValue;
+    this.workRemote = newValue;
+    this.workHybrid = newValue;
   }
 
   pollStatus(): void {
     this.api.getStatus().subscribe({
       next: (s) => (this.state = s),
-      error: () => (this.state = { status: 'idle', conversations: [] }),
+      error: () => (this.state = { status: 'idle', conversations: [], jobs: [] }),
     });
   }
 
@@ -92,8 +176,8 @@ export class AppComponent {
         this.statusMessage = `Ready - ${this.state.conversations.length} conversations loaded`;
         this.loading = false;
 
-        // Auto-select and generate for Oksana Lysenko
-        this.autoSelectOksana();
+        // Auto-select and generate for specified contact
+        this.autoSelectContact();
       },
       error: (err) => {
         this.error = err?.error?.error || 'Refresh failed';
@@ -103,15 +187,14 @@ export class AppComponent {
     });
   }
 
-  private autoSelectOksana(): void {
-    // Find Oksana's conversation (handle different spellings: Lysenko or Lynsesnko)
-    const oksana = this.state.conversations.find(c => {
+  private autoSelectContact(firstName: string = 'Lucy', lastName: string = 'So'): void {
+    const contact = this.state.conversations.find(c => {
       const nameLower = c.name.toLowerCase();
-      return nameLower.includes('oksana') && (nameLower.includes('lysenko') || nameLower.includes('lynsesnko'));
+      return nameLower.includes(firstName.toLowerCase()) && nameLower.includes(lastName.toLowerCase());
     });
 
-    if (oksana) {
-      console.log('[Auto-select] Found Oksana:', oksana.name);
+    if (contact) {
+      console.log('[Auto-select] Found contact:', contact.name);
       console.log('[Auto-select] Opening conversation to check if auto-generate is needed...');
 
       // Open the conversation
@@ -121,29 +204,29 @@ export class AppComponent {
       this.threadMessages = [];
       this.messageText = '';
       this.textareaRows = 3;
-      this.statusMessage = `Loading messages from ${oksana.name}...`;
+      this.statusMessage = `Loading messages from ${contact.name}...`;
 
-      this.api.openConversation(oksana.id).subscribe({
+      this.api.openConversation(contact.id).subscribe({
         next: (res) => {
-          this.selectedConversation = oksana;
+          this.selectedConversation = contact;
           this.threadMessages = (res.messages ?? []).map((m) =>
             typeof m === 'string' ? { text: m } : { text: m.text, timestamp: m.timestamp, fromMe: m.fromMe }
           );
-          this.success = `Opened conversation with ${oksana.name}.`;
-          this.statusMessage = `Conversation with ${oksana.name} - ${this.threadMessages.length} messages loaded`;
+          this.success = `Opened conversation with ${contact.name}.`;
+          this.statusMessage = `Conversation with ${contact.name} - ${this.threadMessages.length} messages loaded`;
           this.loading = false;
 
-          // Check if the most recent message is from Oksana (not from me)
+          // Check if the most recent message is from the contact (not from me)
           if (this.threadMessages.length > 0) {
             const mostRecentMessage = this.threadMessages[this.threadMessages.length - 1];
-            const isFromOksana = !mostRecentMessage.fromMe;
+            const isFromContact = !mostRecentMessage.fromMe;
 
             console.log('[Auto-select] Most recent message fromMe:', mostRecentMessage.fromMe);
-            console.log('[Auto-select] Is from Oksana:', isFromOksana);
+            console.log('[Auto-select] Is from contact:', isFromContact);
 
-            if (isFromOksana) {
-              console.log('[Auto-select] Most recent message is from Oksana - auto-generating AI reply...');
-              this.success = `Opened conversation with ${oksana.name}. Auto-generating reply...`;
+            if (isFromContact) {
+              console.log(`[Auto-select] Most recent message is from ${contact.name} - auto-generating AI reply...`);
+              this.success = `Opened conversation with ${contact.name}. Auto-generating reply...`;
 
               // Small delay to ensure UI is updated
               setTimeout(() => {
@@ -151,7 +234,7 @@ export class AppComponent {
               }, 500);
             } else {
               console.log('[Auto-select] Most recent message is from me - skipping auto-generate');
-              this.success = `Opened conversation with ${oksana.name}. Last message was from you.`;
+              this.success = `Opened conversation with ${contact.name}. Last message was from you.`;
             }
           }
         },
@@ -163,7 +246,7 @@ export class AppComponent {
         },
       });
     } else {
-      console.log('[Auto-select] Oksana not found in conversations');
+      console.log(`[Auto-select] Contact "${firstName} ${lastName}" not found in conversations`);
       console.log('[Auto-select] Available conversations:', this.state.conversations.map(c => c.name).join(', '));
     }
   }
@@ -311,14 +394,14 @@ export class AppComponent {
     this.loading = true;
     this.api.logout().subscribe({
       next: () => {
-        this.state = { status: 'idle', conversations: [] };
+        this.state = { status: 'idle', conversations: [], jobs: [] };
         this.selectedConversation = null;
         this.threadMessages = [];
         this.success = 'Logged out.';
         this.loading = false;
       },
       error: () => {
-        this.state = { status: 'idle', conversations: [] };
+        this.state = { status: 'idle', conversations: [], jobs: [] };
         this.selectedConversation = null;
         this.threadMessages = [];
         this.loading = false;
@@ -367,6 +450,153 @@ export class AppComponent {
         console.log('[generateAiReply] ❌ Error:', err);
         this.error = err?.error?.error || 'Failed to generate AI reply';
         this.statusMessage = 'AI generation failed';
+        this.loading = false;
+      },
+    });
+  }
+
+  searchJobs(): void {
+    this.error = '';
+    this.success = '';
+    this.loading = true;
+    this.statusMessage = 'Searching for jobs...';
+
+    // Build experience level array
+    const experienceLevels: string[] = [];
+    if (this.experienceInternship) experienceLevels.push('1');
+    if (this.experienceEntryLevel) experienceLevels.push('2');
+    if (this.experienceAssociate) experienceLevels.push('3');
+    if (this.experienceMidSenior) experienceLevels.push('4');
+    if (this.experienceDirector) experienceLevels.push('5');
+    if (this.experienceExecutive) experienceLevels.push('6');
+
+    // Build job type array
+    const jobTypes: string[] = [];
+    if (this.jobTypeFullTime) jobTypes.push('F');
+    if (this.jobTypePartTime) jobTypes.push('P');
+    if (this.jobTypeContract) jobTypes.push('C');
+    if (this.jobTypeTemporary) jobTypes.push('T');
+    if (this.jobTypeVolunteer) jobTypes.push('V');
+    if (this.jobTypeInternship) jobTypes.push('I');
+
+    // Build work location array
+    const workLocations: string[] = [];
+    if (this.workOnSite) workLocations.push('1');
+    if (this.workRemote) workLocations.push('2');
+    if (this.workHybrid) workLocations.push('3');
+
+    this.api.searchJobs(
+      this.jobSearchKeywords.trim(),
+      this.jobLocation,
+      this.jobDistance,
+      this.easyApplyOnly,
+      this.generativeAIFilter,
+      experienceLevels,
+      jobTypes,
+      workLocations,
+      this.datePosted,
+      this.salaryMin,
+      this.under10Applicants
+    ).subscribe({
+      next: (res) => {
+        this.state.jobs = res.jobs || [];
+        this.success = `Found ${this.state.jobs.length} jobs.`;
+        this.statusMessage = `Ready - ${this.state.jobs.length} jobs found`;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.error || 'Job search failed';
+        this.statusMessage = 'Error searching jobs';
+        this.loading = false;
+      },
+    });
+  }
+
+  loadAppliedJobs(): void {
+    this.error = '';
+    this.success = '';
+    this.loading = true;
+    this.statusMessage = 'Loading applied jobs...';
+
+    this.api.getAppliedJobs().subscribe({
+      next: (res) => {
+        this.appliedJobs = res.jobs || [];
+        this.success = `Loaded ${this.appliedJobs.length} applied jobs.`;
+        this.statusMessage = `Ready - ${this.appliedJobs.length} applied jobs`;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.error || 'Failed to load applied jobs';
+        this.statusMessage = 'Error loading applied jobs';
+        this.loading = false;
+      },
+    });
+  }
+
+  openJobDetails(job: JobListing): void {
+    this.error = '';
+    this.success = '';
+    this.loading = true;
+    this.statusMessage = `Loading details for ${job.title}...`;
+
+    this.api.getJobDetails(job.id).subscribe({
+      next: (res) => {
+        this.selectedJob = res.job;
+        this.showJobDetailsDialog = true;
+        this.statusMessage = 'Job details loaded';
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.error || 'Failed to load job details';
+        this.statusMessage = 'Error loading job details';
+        this.loading = false;
+        this.selectedJob = job;
+        this.showJobDetailsDialog = true;
+      },
+    });
+  }
+
+  closeJobDetailsDialog(): void {
+    this.showJobDetailsDialog = false;
+    this.selectedJob = null;
+  }
+
+  applyToJob(job: JobListing): void {
+    if (!confirm(`Apply to ${job.title} at ${job.company}?`)) {
+      return;
+    }
+
+    this.error = '';
+    this.success = '';
+    this.loading = true;
+
+    // Show appropriate message based on headless mode
+    if (this.headless) {
+      this.statusMessage = `Restarting browser in visible mode and applying to ${job.title}...`;
+    } else {
+      this.statusMessage = `Applying to ${job.title}...`;
+    }
+
+    this.api.applyToJob(job.id).subscribe({
+      next: (res) => {
+        if (res.ok) {
+          this.success = res.message || 'Application initiated successfully. Complete the application in the visible browser window.';
+          this.statusMessage = 'Application initiated';
+          // Automatically turn off headless mode in the UI
+          this.headless = false;
+          // Add to applied jobs list
+          if (!this.appliedJobs.find(j => j.id === job.id)) {
+            this.appliedJobs.push(job);
+          }
+        } else {
+          this.error = res.message || 'Failed to apply';
+          this.statusMessage = 'Application failed';
+        }
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.error || 'Failed to apply to job';
+        this.statusMessage = 'Application failed';
         this.loading = false;
       },
     });

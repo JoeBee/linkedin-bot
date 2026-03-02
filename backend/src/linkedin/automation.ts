@@ -12,10 +12,23 @@ export interface ConversationSummary {
   unread: boolean;
 }
 
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  postedDate: string;
+  salary?: string;
+  jobUrl: string;
+  description?: string;
+  applyUrl?: string;
+}
+
 export interface BotState {
   status: BotStatus;
   error?: string;
   conversations: ConversationSummary[];
+  jobs: JobListing[];
 }
 
 export interface RefreshDiagnostics {
@@ -41,9 +54,12 @@ let browser: Browser | null = null;
 let context: BrowserContext | null = null;
 let page: Page | null = null;
 let headlessMode = false;
+let loginCredentials: { email: string; password: string } | null = null;
+let appliedJobs: JobListing[] = [];
 let state: BotState = {
   status: 'idle',
   conversations: [],
+  jobs: [],
 };
 
 export function getState(): BotState {
@@ -56,6 +72,57 @@ export function getDiagnostics(): RefreshDiagnostics {
 
 export function getPage(): Page | null {
   return page;
+}
+
+async function ensureBrowserReady(): Promise<boolean> {
+  // Check if browser and page exist
+  if (!browser || !page || !loginCredentials) {
+    console.log('[Browser Recovery] Browser not initialized or no login credentials stored');
+    return false;
+  }
+  
+  // Check if browser is still connected
+  try {
+    if (!browser.isConnected()) {
+      console.log('[Browser Recovery] Browser disconnected, attempting recovery...');
+      await recoverBrowser();
+      return true;
+    }
+    
+    // Check if page is still valid by checking its state
+    if (page.isClosed()) {
+      console.log('[Browser Recovery] Page is closed, attempting recovery...');
+      await recoverBrowser();
+      return true;
+    }
+    
+    return true;
+  } catch (error) {
+    console.log('[Browser Recovery] Error checking browser state:', error);
+    await recoverBrowser();
+    return true;
+  }
+}
+
+async function recoverBrowser(): Promise<void> {
+  if (!loginCredentials) {
+    throw new Error('Cannot recover browser: no login credentials stored. Please logout and login again.');
+  }
+  
+  console.log('[Browser Recovery] Starting browser recovery...');
+  const { email, password } = loginCredentials;
+  
+  // Close existing browser if any
+  await stopBrowser();
+  
+  // Restart browser and re-login
+  try {
+    await login(email, password, headlessMode);
+    console.log('[Browser Recovery] Successfully recovered browser and re-logged in');
+  } catch (error) {
+    console.log('[Browser Recovery] Failed to recover browser:', error);
+    throw new Error('Browser recovery failed. Please logout and login again manually.');
+  }
 }
 
 export async function startBrowser(headless = false): Promise<void> {
@@ -87,6 +154,9 @@ export async function startBrowser(headless = false): Promise<void> {
 export async function login(email: string, password: string, headless = false): Promise<void> {
   await startBrowser(headless);
   if (!page) throw new Error('Page not ready');
+
+  // Store credentials for potential re-login
+  loginCredentials = { email, password };
 
   await page.goto(LINKEDIN_LOGIN, { waitUntil: 'networkidle' });
   await page.waitForSelector('input[name="session_key"]', { timeout: 10000 });
@@ -132,12 +202,16 @@ const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1' || proce
 
 export async function goToMessaging(): Promise<void> {
   if (!page) throw new Error('Not logged in');
+  
+  // Ensure browser is ready, recover if needed
+  await ensureBrowserReady();
+  
   cachedApiConversations = null;
 
   // DEBUG: Log all Voyager URLs seen during navigation
   const voyagerUrlsSeen: string[] = [];
   if (DEBUG) {
-    page.on('response', (resp) => {
+    page!.on('response', (resp) => {
       const url = resp.url();
       if (url.includes('/voyager/')) {
         voyagerUrlsSeen.push(`${resp.status()} ${url}`);
@@ -146,7 +220,7 @@ export async function goToMessaging(): Promise<void> {
   }
 
   // Wait for conversations API - LinkedIn uses voyagerMessagingDashMessagingDashConversations or similar
-  const conversationsApiPromise = page.waitForResponse(
+  const conversationsApiPromise = page!.waitForResponse(
     (resp) => {
       const url = resp.url().toLowerCase();
       return (
@@ -159,7 +233,21 @@ export async function goToMessaging(): Promise<void> {
   );
 
   console.log('[LinkedIn Bot] Navigating to messaging...');
-  await page.goto(LINKEDIN_MESSAGING, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  try {
+    await page!.goto(LINKEDIN_MESSAGING, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  } catch (error: any) {
+    // If browser closed, try to recover
+    if (error.message?.includes('Target page, context or browser has been closed') || 
+        error.message?.includes('Target closed') ||
+        error.message?.includes('Browser closed')) {
+      console.log('[LinkedIn Messaging] Browser closed during navigation, attempting recovery...');
+      await ensureBrowserReady();
+      // Retry navigation after recovery
+      await page!.goto(LINKEDIN_MESSAGING, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } else {
+      throw error;
+    }
+  }
 
   // Wait for skeleton to disappear (SPA has rendered)
   const skeletonPromise = page.waitForSelector('#app-boot-bg-loader', { state: 'detached', timeout: 45000 }).then(() => true).catch(() => false);
@@ -769,10 +857,28 @@ export async function refreshConversations(): Promise<ConversationSummary[]> {
 
 export async function openConversation(threadIdOrIndex: string): Promise<boolean> {
   if (!page) return false;
+  
+  // Ensure browser is ready, recover if needed
+  await ensureBrowserReady();
+  
   await goToMessaging();
   const directUrl = `https://www.linkedin.com/messaging/thread/${threadIdOrIndex}/`;
-  await page.goto(directUrl, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2000);
+  try {
+    await page!.goto(directUrl, { waitUntil: 'domcontentloaded' });
+  } catch (error: any) {
+    // If browser closed, try to recover
+    if (error.message?.includes('Target page, context or browser has been closed') || 
+        error.message?.includes('Target closed') ||
+        error.message?.includes('Browser closed')) {
+      console.log('[LinkedIn Messaging] Browser closed during conversation navigation, attempting recovery...');
+      await ensureBrowserReady();
+      // Retry navigation after recovery
+      await page!.goto(directUrl, { waitUntil: 'domcontentloaded' });
+    } else {
+      throw error;
+    }
+  }
+  await page!.waitForTimeout(2000);
   return true;
 }
 
@@ -1041,5 +1147,664 @@ export async function stopBrowser(): Promise<void> {
   browser = null;
   context = null;
   page = null;
-  state = { status: 'idle', conversations: [] };
+  state = { status: 'idle', conversations: [], jobs: [] };
+}
+
+// ============ JOB SEARCH FUNCTIONALITY ============
+
+const LINKEDIN_JOBS_SEARCH = 'https://www.linkedin.com/jobs/search/';
+
+export async function searchJobs(
+  keywords: string,
+  location?: string,
+  distance?: number,
+  easyApply?: boolean,
+  generativeAI?: boolean,
+  experienceLevels?: string[],
+  jobTypes?: string[],
+  workLocations?: string[],
+  datePosted?: string,
+  salaryMin?: string,
+  under10Applicants?: boolean
+): Promise<JobListing[]> {
+  if (!page) throw new Error('Not logged in');
+  
+  // Ensure browser is ready, recover if needed
+  await ensureBrowserReady();
+  
+  console.log('[LinkedIn Jobs] Searching for:', keywords, {
+    location, distance, easyApply, generativeAI,
+    experienceLevels, jobTypes, workLocations, datePosted, salaryMin, under10Applicants
+  });
+  
+  // Build search URL with filters
+  let searchUrl = `${LINKEDIN_JOBS_SEARCH}?keywords=${encodeURIComponent(keywords || '')}`;
+  
+  if (location) {
+    searchUrl += `&location=${encodeURIComponent(location)}`;
+  }
+  
+  if (distance !== undefined) {
+    searchUrl += `&distance=${distance}`;
+  }
+  
+  if (easyApply) {
+    searchUrl += `&f_AL=true`;
+  }
+  
+  if (generativeAI) {
+    searchUrl += `&keywords=${encodeURIComponent((keywords || '') + ' generative ai')}`;
+  }
+  
+  // Experience levels (f_E)
+  if (experienceLevels && experienceLevels.length > 0) {
+    searchUrl += `&f_E=${experienceLevels.join(',')}`;
+  }
+  
+  // Job types (f_JT)
+  if (jobTypes && jobTypes.length > 0) {
+    searchUrl += `&f_JT=${jobTypes.join(',')}`;
+  }
+  
+  // Work locations (f_WT)
+  if (workLocations && workLocations.length > 0) {
+    searchUrl += `&f_WT=${workLocations.join(',')}`;
+  }
+  
+  // Date posted (f_TPR)
+  if (datePosted) {
+    searchUrl += `&f_TPR=${datePosted}`;
+  }
+  
+  // Salary minimum (f_SB2)
+  if (salaryMin) {
+    searchUrl += `&f_SB2=${salaryMin}`;
+  }
+  
+  // Under 10 applicants (f_JIYN, not f_EA)
+  if (under10Applicants) {
+    searchUrl += `&f_JIYN=true`;
+  }
+  
+  console.log('[LinkedIn Jobs] Search URL:', searchUrl);
+  
+  try {
+    await page!.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  } catch (error: any) {
+    // If browser closed, try to recover
+    if (error.message?.includes('Target page, context or browser has been closed') || 
+        error.message?.includes('Target closed') ||
+        error.message?.includes('Browser closed')) {
+      console.log('[LinkedIn Jobs] Browser closed during navigation, attempting recovery...');
+      await ensureBrowserReady();
+      // Retry navigation after recovery
+      await page!.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } else {
+      throw error;
+    }
+  }
+  
+  try {
+  
+  // Wait for job cards to load
+  await page!.waitForTimeout(2000);
+  
+  // Check what URL we actually landed on (LinkedIn might redirect or modify URL)
+  const actualUrl = page!.url();
+  console.log('[LinkedIn Jobs] Actual URL after navigation:', actualUrl);
+  if (actualUrl !== searchUrl) {
+    console.log('[LinkedIn Jobs] ⚠️ URL was modified by LinkedIn!');
+  }
+  
+  // Wait for job list to appear
+  await page.waitForSelector('ul.jobs-search__results-list, div.jobs-search__results-list, li.jobs-search-results__list-item', { timeout: 10000 }).catch(() => {
+    console.log('[LinkedIn Jobs] Job list selector not found, continuing anyway');
+  });
+  
+  await page.waitForTimeout(1500);
+  
+  // Scroll to load more jobs
+  for (let i = 0; i < 5; i++) {
+    await page.evaluate(() => {
+      const scrollableSelectors = [
+        '.jobs-search-results-list',
+        '.scaffold-layout__list-container',
+        '[class*="jobs-search"]',
+        'main',
+      ];
+      
+      for (const sel of scrollableSelectors) {
+        const el = document.querySelector(sel) as HTMLElement | null;
+        if (el && el.scrollHeight > el.clientHeight) {
+          el.scrollTop = el.scrollTop + 500;
+          return true;
+        }
+      }
+      window.scrollBy(0, 500);
+      return false;
+    });
+    await page.waitForTimeout(500);
+  }
+  
+  // Extract job listings
+  const jobs = await page.evaluate(() => {
+    const results: Array<{
+      id: string;
+      title: string;
+      company: string;
+      location: string;
+      postedDate: string;
+      salary?: string;
+      jobUrl: string;
+      description?: string;
+      applyUrl?: string;
+    }> = [];
+    
+    const seenIds = new Set<string>();
+    
+    // Try multiple selectors for job cards
+    const cardSelectors = [
+      'li.jobs-search-results__list-item',
+      'div.job-card-container',
+      '[data-job-id]',
+      'div.jobs-search-results__list-item',
+      'li[class*="job"]',
+      'ul.jobs-search__results-list > li',
+      '.scaffold-layout__list-container li',
+    ];
+    
+    let cards: Element[] = [];
+    for (const sel of cardSelectors) {
+      const found = Array.from(document.querySelectorAll(sel));
+      if (found.length > 0) {
+        cards = found;
+        console.log(`[Jobs] Found ${cards.length} job cards using selector: ${sel}`);
+        break;
+      }
+    }
+    
+    if (cards.length === 0) {
+      console.log('[Jobs] No job cards found. HTML sample:', document.body.innerHTML.slice(0, 1000));
+    }
+    
+    for (let i = 0; i < Math.min(cards.length, 50); i++) {
+      try {
+        const card = cards[i];
+        
+        // Extract job ID
+        const jobId = card.getAttribute('data-job-id') || 
+                     card.getAttribute('data-occludable-job-id') ||
+                     card.querySelector('[data-job-id]')?.getAttribute('data-job-id') ||
+                     card.querySelector('[data-occludable-job-id]')?.getAttribute('data-occludable-job-id') ||
+                     `job-${i}`;
+        
+        if (seenIds.has(jobId)) continue;
+        seenIds.add(jobId);
+        
+        // Extract job URL
+        const linkEl = card.querySelector('a[href*="/jobs/view/"], a.job-card-container__link') as HTMLAnchorElement | null;
+        const jobUrl = linkEl?.href || '';
+        
+        // Extract title - try multiple selectors
+        const titleSelectors = [
+          '.job-card-list__title',
+          '.job-card-container__link',
+          'a.job-card-list__title',
+          '[class*="job-title"]',
+          'a[href*="/jobs/view/"]',
+        ];
+        let title = '';
+        for (const sel of titleSelectors) {
+          const el = card.querySelector(sel);
+          if (el?.textContent?.trim()) {
+            title = el.textContent.trim();
+            break;
+          }
+        }
+        if (!title) title = 'Unknown Title';
+        
+        // Extract company - try multiple selectors
+        const companySelectors = [
+          '.job-card-container__primary-description',
+          '.job-card-container__company-name',
+          'a[class*="company"]',
+          '[class*="company-name"]',
+          '.artdeco-entity-lockup__subtitle',
+        ];
+        let company = '';
+        for (const sel of companySelectors) {
+          const el = card.querySelector(sel);
+          const text = el?.textContent?.trim() || '';
+          if (text && !text.includes('·') && text.length < 100) {
+            company = text;
+            break;
+          }
+        }
+        if (!company) company = 'Unknown Company';
+        
+        // Extract location - try multiple selectors
+        const locationSelectors = [
+          '.job-card-container__metadata-item',
+          '[class*="metadata"]',
+          '.artdeco-entity-lockup__caption',
+        ];
+        let location = '';
+        for (const sel of locationSelectors) {
+          const el = card.querySelector(sel);
+          const text = el?.textContent?.trim() || '';
+          if (text && !text.toLowerCase().includes('ago') && text.length < 100) {
+            location = text;
+            break;
+          }
+        }
+        if (!location) location = 'Unknown Location';
+        
+        // Extract posted date - try multiple selectors
+        const dateSelectors = [
+          'time',
+          '.job-card-container__listed-time',
+          '[class*="listed-time"]',
+          '[class*="posted"]',
+        ];
+        let postedDate = '';
+        for (const sel of dateSelectors) {
+          const el = card.querySelector(sel);
+          const text = el?.textContent?.trim() || el?.getAttribute('datetime') || '';
+          if (text) {
+            postedDate = text;
+            break;
+          }
+        }
+        if (!postedDate) {
+          // Fallback: look for text with "ago" in it
+          const allText = card.textContent || '';
+          const agoMatch = allText.match(/(\d+\s+(?:minute|hour|day|week|month)s?\s+ago)/i);
+          if (agoMatch) postedDate = agoMatch[1];
+        }
+        if (!postedDate) postedDate = 'Unknown';
+        
+        // Extract salary if available
+        const salaryEl = card.querySelector('[class*="salary"], [class*="compensation"]');
+        const salary = salaryEl ? salaryEl.textContent?.trim() : undefined;
+        
+        // Extract description snippet
+        const descEl = card.querySelector('.job-card-list__snippet, [class*="job-snippet"], [class*="snippet"]');
+        const description = descEl ? descEl.textContent?.trim() : undefined;
+        
+        console.log(`[Jobs] Parsed job ${i}:`, { id: jobId, title: title.slice(0, 30), company: company.slice(0, 30), location: location.slice(0, 30), postedDate });
+        
+        results.push({
+          id: jobId,
+          title,
+          company,
+          location,
+          postedDate,
+          salary,
+          jobUrl,
+          description,
+          applyUrl: jobUrl,
+        });
+      } catch (error) {
+        console.log(`[Jobs] Error processing job card ${i}:`, error);
+        continue;
+      }
+    }
+    
+    return results;
+  });
+  
+  console.log('[LinkedIn Jobs] Found', jobs.length, 'job listings');
+  state.jobs = jobs;
+  return jobs;
+  } catch (error: any) {
+    console.log('[LinkedIn Jobs] Error during job search:', error);
+    
+    // If it's a browser closed error, the recovery should have already been attempted in the navigation
+    // If we still get an error here, just throw it
+    if (error.message?.includes('Target page, context or browser has been closed') || 
+        error.message?.includes('Target closed') ||
+        error.message?.includes('Browser closed')) {
+      throw new Error('Browser was closed. Please try again or logout and login.');
+    }
+    
+    throw error;
+  }
+}
+
+export async function getJobDetails(jobId: string): Promise<JobListing | null> {
+  if (!page) throw new Error('Not logged in');
+  
+  // Ensure browser is ready, recover if needed
+  await ensureBrowserReady();
+
+  console.log('[LinkedIn Jobs] Getting details for job:', jobId);
+
+  // Find job URL from state
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job || !job.jobUrl) {
+    console.log('[LinkedIn Jobs] Job not found in state');
+    return null;
+  }
+  
+  try {
+    await page!.goto(job.jobUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  } catch (error: any) {
+    // If browser closed, try to recover
+    if (error.message?.includes('Target page, context or browser has been closed') || 
+        error.message?.includes('Target closed') ||
+        error.message?.includes('Browser closed')) {
+      console.log('[LinkedIn Jobs] Browser closed during navigation, attempting recovery...');
+      await ensureBrowserReady();
+      // Retry navigation after recovery
+      await page!.goto(job.jobUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } else {
+      throw error;
+    }
+  }
+  
+  try {
+    await page!.waitForTimeout(3000);
+    
+    // Extract detailed job information
+    const details = await page.evaluate(() => {
+      console.log('[Job Details] Starting extraction...');
+      
+      // Title - try multiple selectors
+      const titleSelectors = [
+        '.job-details-jobs-unified-top-card__job-title',
+        '.jobs-unified-top-card__job-title',
+        'h1.job-title',
+        'h1[class*="job-title"]',
+        '.t-24',
+      ];
+      let title = '';
+      for (const sel of titleSelectors) {
+        const el = document.querySelector(sel);
+        if (el?.textContent?.trim()) {
+          title = el.textContent.trim();
+          console.log('[Job Details] Found title:', title.slice(0, 50));
+          break;
+        }
+      }
+      
+      // Company - try multiple selectors
+      const companySelectors = [
+        '.job-details-jobs-unified-top-card__company-name',
+        '.jobs-unified-top-card__company-name',
+        'a[data-tracking-control-name*="company"]',
+        '.artdeco-entity-lockup__subtitle',
+        '[class*="company-name"]',
+      ];
+      let company = '';
+      for (const sel of companySelectors) {
+        const el = document.querySelector(sel);
+        if (el?.textContent?.trim()) {
+          company = el.textContent.trim();
+          console.log('[Job Details] Found company:', company.slice(0, 50));
+          break;
+        }
+      }
+      
+      // Location - try multiple selectors
+      const locationSelectors = [
+        '.job-details-jobs-unified-top-card__primary-description',
+        '.jobs-unified-top-card__workplace-type',
+        '.jobs-unified-top-card__bullet',
+        '[class*="location"]',
+        '.t-black--light',
+      ];
+      let location = '';
+      for (const sel of locationSelectors) {
+        const els = document.querySelectorAll(sel);
+        for (const el of Array.from(els)) {
+          const text = el.textContent?.trim() || '';
+          if (text && !text.toLowerCase().includes('ago') && text.length < 100 && text.length > 3) {
+            location = text;
+            console.log('[Job Details] Found location:', location.slice(0, 50));
+            break;
+          }
+        }
+        if (location) break;
+      }
+      
+      // Description - try multiple selectors
+      const descSelectors = [
+        '.jobs-description__content',
+        '.jobs-description',
+        '.jobs-box__html-content',
+        '[class*="job-description"]',
+        '.description__text',
+      ];
+      let description = '';
+      for (const sel of descSelectors) {
+        const el = document.querySelector(sel);
+        if (el?.textContent?.trim() && el.textContent.trim().length > 50) {
+          description = el.textContent.trim();
+          console.log('[Job Details] Found description:', description.slice(0, 100));
+          break;
+        }
+      }
+      
+      // Salary
+      const salarySelectors = [
+        '[class*="salary"]',
+        '[class*="compensation"]',
+        '.mt2',
+      ];
+      let salary: string | undefined = undefined;
+      for (const sel of salarySelectors) {
+        const el = document.querySelector(sel);
+        const text = el?.textContent?.trim() || '';
+        if (text && (text.includes('$') || text.toLowerCase().includes('salary'))) {
+          salary = text;
+          console.log('[Job Details] Found salary:', salary);
+          break;
+        }
+      }
+      
+      // Posted date - try multiple selectors
+      const dateSelectors = [
+        '.jobs-unified-top-card__posted-date',
+        '.jobs-unified-top-card__subtitle-primary-grouping time',
+        'time',
+        '[class*="posted"]',
+      ];
+      let postedDate = '';
+      for (const sel of dateSelectors) {
+        const el = document.querySelector(sel);
+        const text = el?.textContent?.trim() || el?.getAttribute('datetime') || '';
+        if (text) {
+          postedDate = text;
+          console.log('[Job Details] Found posted date:', postedDate);
+          break;
+        }
+      }
+      
+      // Apply button/link
+      const applySelectors = [
+        'button.jobs-apply-button',
+        'a[href*="apply"]',
+        'button[aria-label*="Apply"]',
+      ];
+      let applyUrl = '';
+      for (const sel of applySelectors) {
+        const btn = document.querySelector(sel) as HTMLElement | null;
+        if (btn instanceof HTMLAnchorElement) {
+          applyUrl = btn.href;
+          console.log('[Job Details] Found apply URL:', applyUrl);
+          break;
+        }
+      }
+      
+      console.log('[Job Details] Extraction complete');
+      
+      return {
+        title,
+        company,
+        location,
+        description,
+        salary,
+        postedDate,
+        applyUrl,
+      };
+    });
+    
+    console.log('[LinkedIn Jobs] Extracted details:', {
+      title: details.title?.slice(0, 50),
+      company: details.company?.slice(0, 50),
+      location: details.location?.slice(0, 50),
+      postedDate: details.postedDate,
+      descriptionLength: details.description?.length,
+    });
+    
+    // Update the job in state with detailed info
+    const updatedJob: JobListing = {
+      ...job,
+      title: details.title || job.title,
+      company: details.company || job.company,
+      location: details.location || job.location,
+      description: details.description || job.description,
+      salary: details.salary || job.salary,
+      postedDate: details.postedDate || job.postedDate,
+      applyUrl: details.applyUrl || job.applyUrl,
+    };
+    
+    const jobIndex = state.jobs.findIndex(j => j.id === jobId);
+    if (jobIndex >= 0) {
+      state.jobs[jobIndex] = updatedJob;
+    }
+    
+    return updatedJob;
+  } catch (error) {
+    console.log('[LinkedIn Jobs] Error getting job details:', error);
+    return job;
+  }
+}
+
+export async function applyToJob(jobId: string): Promise<boolean> {
+  if (!page) throw new Error('Not logged in');
+  
+  // Ensure browser is ready, recover if needed
+  await ensureBrowserReady();
+
+  console.log('[LinkedIn Jobs] Applying to job:', jobId);
+
+  // If browser is in headless mode, restart it in visible mode
+  if (headlessMode && browser && loginCredentials) {
+    console.log('[LinkedIn Jobs] Browser is in headless mode. Restarting in visible mode...');
+    
+    const { email, password } = loginCredentials;
+    
+    // Close current browser
+    await stopBrowser();
+    
+    // Restart in visible mode and re-login
+    try {
+      await login(email, password, false); // headless = false
+      console.log('[LinkedIn Jobs] Successfully restarted browser in visible mode and re-logged in');
+    } catch (error) {
+      console.log('[LinkedIn Jobs] Error restarting browser:', error);
+      throw new Error('Failed to restart browser in visible mode. Please logout and login again manually.');
+    }
+  }
+  
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job || !job.jobUrl) {
+    console.log('[LinkedIn Jobs] Job not found in state');
+    return false;
+  }
+  
+  try {
+    // Navigate to job if not already there
+    if (!page!.url().includes(job.jobUrl)) {
+      try {
+        await page!.goto(job.jobUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      } catch (error: any) {
+        // If browser closed, try to recover
+        if (error.message?.includes('Target page, context or browser has been closed') || 
+            error.message?.includes('Target closed') ||
+            error.message?.includes('Browser closed')) {
+          console.log('[LinkedIn Jobs] Browser closed during navigation, attempting recovery...');
+          await ensureBrowserReady();
+          // Retry navigation after recovery
+          await page!.goto(job.jobUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } else {
+          throw error;
+        }
+      }
+      await page!.waitForTimeout(2000);
+    }
+    
+    // Look for Easy Apply button
+    const easyApplyBtn = page.locator('button.jobs-apply-button, button[aria-label*="Easy Apply"]').first();
+    
+    if (await easyApplyBtn.count() > 0) {
+      await easyApplyBtn.click();
+      await page.waitForTimeout(1500);
+      
+      // Check if application modal/form opened
+      const modalExists = await page.locator('[role="dialog"], .jobs-easy-apply-modal, [class*="apply-modal"]').count() > 0;
+      
+      if (modalExists) {
+        console.log('[LinkedIn Jobs] Easy Apply modal opened - user needs to complete application');
+        // Track this job as applied
+        if (!appliedJobs.find(j => j.id === jobId)) {
+          appliedJobs.push(job);
+          console.log('[LinkedIn Jobs] Added job to applied jobs list');
+        }
+        return true;
+      }
+    }
+    
+    // If no Easy Apply, look for regular apply button
+    const applyLink = page!.locator('a[href*="apply"], button[class*="apply"]').first();
+    if (await applyLink.count() > 0) {
+      const href = await applyLink.getAttribute('href');
+      if (href && href.startsWith('http')) {
+        console.log('[LinkedIn Jobs] External apply link found:', href);
+        try {
+          await page!.goto(href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } catch (error: any) {
+          // If browser closed, try to recover
+          if (error.message?.includes('Target page, context or browser has been closed') || 
+              error.message?.includes('Target closed') ||
+              error.message?.includes('Browser closed')) {
+            console.log('[LinkedIn Jobs] Browser closed during external apply navigation, attempting recovery...');
+            await ensureBrowserReady();
+            // Retry navigation after recovery
+            await page!.goto(href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          } else {
+            throw error;
+          }
+        }
+        await page!.waitForTimeout(2000);
+        // Track this job as applied
+        if (!appliedJobs.find(j => j.id === jobId)) {
+          appliedJobs.push(job);
+          console.log('[LinkedIn Jobs] Added job to applied jobs list');
+        }
+        return true;
+      } else {
+        await applyLink.click();
+        await page.waitForTimeout(1500);
+        // Track this job as applied
+        if (!appliedJobs.find(j => j.id === jobId)) {
+          appliedJobs.push(job);
+          console.log('[LinkedIn Jobs] Added job to applied jobs list');
+        }
+        return true;
+      }
+    }
+    
+    console.log('[LinkedIn Jobs] No apply button found');
+    return false;
+  } catch (error) {
+    console.log('[LinkedIn Jobs] Error applying to job:', error);
+    return false;
+  }
+}
+
+export async function getAppliedJobs(): Promise<JobListing[]> {
+  console.log('[LinkedIn Jobs] Retrieving applied jobs:', appliedJobs.length);
+  return appliedJobs;
 }

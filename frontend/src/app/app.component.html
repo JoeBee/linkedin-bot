@@ -7,22 +7,24 @@
   }
 
   <header>
-    <h1>LinkedIn Messaging Bot</h1>
+    <h1>LinkedIn Bot</h1>
     <div class="header-controls">
       <p class="status">Status: <strong>{{ statusMessage }}</strong></p>
     </div>
   </header>
 
-  @if (error) {
-    <div class="message error">{{ error }}</div>
-  }
-  @if (success) {
-    <div class="message success">{{ success }}</div>
+  @if ((error || success) && (state.status === 'idle' || state.status === 'error')) {
+    @if (error) {
+      <div class="message error">{{ error }}</div>
+    }
+    @if (success) {
+      <div class="message success">{{ success }}</div>
+    }
   }
 
   @if (state.status === 'idle' || state.status === 'error') {
-    <section class="card">
-      <h2>Login</h2>
+    <section class="card login-card">
+      <h2>Login to LinkedIn</h2>
       <p class="hint">Your credentials are sent only to your local backend. A browser window will open to log into LinkedIn.</p>
       <div class="form">
         <div class="credentials-row">
@@ -66,6 +68,25 @@
   }
 
   @if (state.status === 'ready' || state.status === 'logging_in') {
+    <div class="top-section-row">
+      @if (error) {
+        <div class="message error inline-message">{{ error }}</div>
+      }
+      @if (success) {
+        <div class="message success inline-message">{{ success }}</div>
+      }
+      @if (!error && !success) {
+        <div class="inline-message-spacer"></div>
+      }
+      
+      <section class="card logout-card inline-logout">
+        <div class="logout-section">
+          <p class="logout-info">Logged in as <strong>{{ email }}</strong></p>
+          <button (click)="logout()" [disabled]="loading" class="secondary">Logout</button>
+        </div>
+      </section>
+    </div>
+
     <div class="tabs">
       <button 
         class="tab-button" 
@@ -83,10 +104,10 @@
       </button>
       <button 
         class="tab-button" 
-        [class.active]="activeTab === 'notifications'"
-        (click)="setActiveTab('notifications')"
+        [class.active]="activeTab === 'appliedJobs'"
+        (click)="setActiveTab('appliedJobs')"
       >
-        Notifications
+        Jobs Applied For
       </button>
     </div>
 
@@ -96,7 +117,6 @@
         <h2>Conversations</h2>
         <div class="actions">
           <button (click)="refresh()" [disabled]="loading">Refresh conversations</button>
-          <button (click)="logout()" [disabled]="loading" class="secondary">Logout</button>
         </div>
         @if (state.conversations.length > 0) {
           <div class="conversation-filter">
@@ -230,16 +250,310 @@
       <div class="tab-content">
         <section class="card">
           <h2>Jobs</h2>
-          <p class="hint">Job search and applications will be displayed here.</p>
+          <div class="job-filters-container">
+            <div class="job-filters-header" (click)="toggleFilters()">
+              <h3>Search Filters</h3>
+              <button type="button" class="filter-toggle-btn" aria-label="Toggle filters">
+                {{ filtersExpanded ? '▼' : '▶' }}
+              </button>
+            </div>
+            
+            @if (filtersExpanded) {
+              <div class="job-filters-section">
+                <div class="job-search-row">
+                  <input
+                    type="text"
+                    placeholder="Job keywords (e.g., 'Software Engineer', 'Python')"
+                    [(ngModel)]="jobSearchKeywords"
+                    class="job-search-input"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Location"
+                    [(ngModel)]="jobLocation"
+                    class="job-location-input"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Miles"
+                    [(ngModel)]="jobDistance"
+                    class="job-distance-input"
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                
+                <div class="filter-group">
+                  <div class="filter-group-header">
+                    <button 
+                      type="button" 
+                      class="toggle-all-btn" 
+                      (click)="toggleAllExperience()"
+                      title="Toggle all Experience Level options"
+                    >
+                      ⇅
+                    </button>
+                    <label class="filter-group-label">Experience Level</label>
+                  </div>
+                  <div class="filter-checkboxes">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="experienceInternship" />
+                      <span>Internship</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="experienceEntryLevel" />
+                      <span>Entry level</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="experienceAssociate" />
+                      <span>Associate</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="experienceMidSenior" />
+                      <span>Mid-Senior</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="experienceDirector" />
+                      <span>Director</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="experienceExecutive" />
+                      <span>Executive</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="filter-group">
+                  <div class="filter-group-header">
+                    <button 
+                      type="button" 
+                      class="toggle-all-btn" 
+                      (click)="toggleAllJobType()"
+                      title="Toggle all Job Type options"
+                    >
+                      ⇅
+                    </button>
+                    <label class="filter-group-label">Job Type</label>
+                  </div>
+                  <div class="filter-checkboxes">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="jobTypeFullTime" />
+                      <span>Full-time</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="jobTypePartTime" />
+                      <span>Part-time</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="jobTypeContract" />
+                      <span>Contract</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="jobTypeTemporary" />
+                      <span>Temporary</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="jobTypeVolunteer" />
+                      <span>Volunteer</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="jobTypeInternship" />
+                      <span>Internship</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="filter-group">
+                  <div class="filter-group-header">
+                    <button 
+                      type="button" 
+                      class="toggle-all-btn" 
+                      (click)="toggleAllWorkLocation()"
+                      title="Toggle all Work Location options"
+                    >
+                      ⇅
+                    </button>
+                    <label class="filter-group-label">Work Location</label>
+                  </div>
+                  <div class="filter-checkboxes">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="workOnSite" />
+                      <span>On-site</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="workRemote" />
+                      <span>Remote</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="workHybrid" />
+                      <span>Hybrid</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="filter-row">
+                  <div class="filter-field">
+                    <label class="filter-label">Date Posted</label>
+                    <select [(ngModel)]="datePosted" class="filter-select">
+                      <option value="">Any time</option>
+                      <option value="r86400">Past 24 hours</option>
+                      <option value="r604800">Past week</option>
+                      <option value="r2592000">Past month</option>
+                    </select>
+                  </div>
+                  
+                  <div class="filter-field">
+                    <label class="filter-label">Minimum Salary</label>
+                    <select [(ngModel)]="salaryMin" class="filter-select">
+                      <option value="">Any</option>
+                      <option value="1">$40,000+</option>
+                      <option value="2">$60,000+</option>
+                      <option value="3">$80,000+</option>
+                      <option value="4">$100,000+</option>
+                      <option value="5">$120,000+</option>
+                      <option value="6">$140,000+</option>
+                      <option value="7">$160,000+</option>
+                      <option value="8">$180,000+</option>
+                      <option value="9">$200,000+</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div class="job-toggles-row">
+                  <div class="job-toggle">
+                    <label class="toggle-switch">
+                      <input type="checkbox" [(ngModel)]="easyApplyOnly" />
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-label">Easy Apply Only</span>
+                  </div>
+                  <div class="job-toggle">
+                    <label class="toggle-switch">
+                      <input type="checkbox" [(ngModel)]="generativeAIFilter" />
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-label">Generative AI</span>
+                  </div>
+                  <div class="job-toggle">
+                    <label class="toggle-switch">
+                      <input type="checkbox" [(ngModel)]="under10Applicants" />
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-label">Under 10 Applicants</span>
+                  </div>
+                  <button (click)="searchJobs()" [disabled]="loading" class="search-jobs-btn">Search Jobs</button>
+                </div>
+              </div>
+            }
+          </div>
+
+          @if (state.jobs.length > 0) {
+            <div class="jobs-table-container">
+              <table class="jobs-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Company</th>
+                    <th>Location</th>
+                    <th>Posted</th>
+                    <th>Salary</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (job of state.jobs; track job.id) {
+                    <tr>
+                      <td class="job-title-cell">{{ job.title }}</td>
+                      <td>{{ job.company }}</td>
+                      <td>{{ job.location }}</td>
+                      <td>{{ job.postedDate }}</td>
+                      <td>{{ job.salary || '—' }}</td>
+                      <td class="job-actions-cell">
+                        <button 
+                          (click)="openJobDetails(job)" 
+                          [disabled]="loading"
+                          class="btn-small"
+                          title="View details"
+                        >
+                          Details
+                        </button>
+                        <button 
+                          (click)="applyToJob(job)" 
+                          [disabled]="loading"
+                          class="btn-small btn-apply"
+                          title="Apply to job"
+                        >
+                          Apply
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="hint">Enter keywords and click "Search Jobs" to find job listings on LinkedIn.</p>
+          }
         </section>
       </div>
     }
 
-    @if (activeTab === 'notifications') {
+    @if (activeTab === 'appliedJobs') {
       <div class="tab-content">
         <section class="card">
-          <h2>Notifications</h2>
-          <p class="hint">LinkedIn notifications will be displayed here.</p>
+          <h2>Jobs Applied For</h2>
+          <p class="hint">Track all the LinkedIn jobs you've applied to through this application.</p>
+          
+          @if (appliedJobs.length > 0) {
+            <div class="jobs-table-container">
+              <table class="jobs-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Company</th>
+                    <th>Location</th>
+                    <th>Posted</th>
+                    <th>Salary</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (job of appliedJobs; track job.id) {
+                    <tr>
+                      <td class="job-title-cell">{{ job.title }}</td>
+                      <td>{{ job.company }}</td>
+                      <td>{{ job.location }}</td>
+                      <td>{{ job.postedDate }}</td>
+                      <td>{{ job.salary || '—' }}</td>
+                      <td class="job-actions-cell">
+                        <button 
+                          (click)="openJobDetails(job)" 
+                          [disabled]="loading"
+                          class="btn-small"
+                          title="View details"
+                        >
+                          Details
+                        </button>
+                        @if (job.jobUrl) {
+                          <a 
+                            [href]="job.jobUrl" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="btn-small btn-link"
+                            title="View on LinkedIn"
+                          >
+                            View
+                          </a>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="hint">No applied jobs yet. Jobs you apply to will appear here.</p>
+          }
         </section>
       </div>
     }
@@ -303,3 +617,63 @@
     }
   }
 </div>
+
+@if (showJobDetailsDialog && selectedJob) {
+  <div class="dialog-overlay" (click)="closeJobDetailsDialog()" aria-modal="true" role="dialog">
+    <div class="dialog-content" (click)="$event.stopPropagation(); $event.preventDefault()">
+      <div class="dialog-header">
+        <h2>{{ selectedJob.title }}</h2>
+        <button class="dialog-close" (click)="closeJobDetailsDialog(); $event.stopPropagation()" aria-label="Close">×</button>
+      </div>
+      <div class="dialog-body">
+        <div class="job-detail-section">
+          <div class="job-detail-row">
+            <strong>Company:</strong>
+            <span>{{ selectedJob.company }}</span>
+          </div>
+          <div class="job-detail-row">
+            <strong>Location:</strong>
+            <span>{{ selectedJob.location }}</span>
+          </div>
+          <div class="job-detail-row">
+            <strong>Posted:</strong>
+            <span>{{ selectedJob.postedDate }}</span>
+          </div>
+          @if (selectedJob.salary) {
+            <div class="job-detail-row">
+              <strong>Salary:</strong>
+              <span>{{ selectedJob.salary }}</span>
+            </div>
+          }
+          @if (selectedJob.jobUrl) {
+            <div class="job-detail-row">
+              <strong>LinkedIn URL:</strong>
+              <a [href]="selectedJob.jobUrl" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">
+                View on LinkedIn
+              </a>
+            </div>
+          }
+        </div>
+        
+        @if (selectedJob.description) {
+          <div class="job-description-section">
+            <h3>Job Description</h3>
+            <div class="job-description">{{ selectedJob.description }}</div>
+          </div>
+        } @else {
+          <div class="job-description-section">
+            <p class="hint">Job description not available. Click "View on LinkedIn" to see full details.</p>
+          </div>
+        }
+      </div>
+      <div class="dialog-footer">
+        <button (click)="applyToJob(selectedJob); $event.stopPropagation()" [disabled]="loading" class="btn-apply-large">
+          Apply to this Job
+        </button>
+        <button (click)="closeJobDetailsDialog(); $event.stopPropagation()" class="secondary">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+}

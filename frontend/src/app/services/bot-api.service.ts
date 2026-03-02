@@ -8,6 +8,7 @@ export interface BotState {
   status: 'idle' | 'logging_in' | 'ready' | 'error';
   error?: string;
   conversations: ConversationSummary[];
+  jobs: JobListing[];
 }
 
 export interface ConversationSummary {
@@ -15,6 +16,18 @@ export interface ConversationSummary {
   name: string;
   preview: string;
   unread: boolean;
+}
+
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  postedDate: string;
+  salary?: string;
+  jobUrl: string;
+  description?: string;
+  applyUrl?: string;
 }
 
 export interface RefreshDiagnostics {
@@ -83,5 +96,49 @@ export class BotApiService {
       conversationHistory,
       recipientName,
     });
+  }
+
+  searchJobs(
+    keywords: string,
+    location?: string,
+    distance?: number,
+    easyApply?: boolean,
+    generativeAI?: boolean,
+    experienceLevels?: string[],
+    jobTypes?: string[],
+    workLocations?: string[],
+    datePosted?: string,
+    salaryMin?: string,
+    under10Applicants?: boolean
+  ): Observable<{ jobs: JobListing[] }> {
+    return this.http.post<{ jobs: JobListing[] }>(`${API}/jobs/search`, { 
+      keywords,
+      location,
+      distance,
+      easyApply,
+      generativeAI,
+      experienceLevels,
+      jobTypes,
+      workLocations,
+      datePosted,
+      salaryMin,
+      under10Applicants
+    });
+  }
+
+  getJobs(): Observable<{ jobs: JobListing[] }> {
+    return this.http.get<{ jobs: JobListing[] }>(`${API}/jobs`);
+  }
+
+  getJobDetails(jobId: string): Observable<{ job: JobListing }> {
+    return this.http.get<{ job: JobListing }>(`${API}/jobs/${jobId}`);
+  }
+
+  applyToJob(jobId: string): Observable<{ ok: boolean; message?: string }> {
+    return this.http.post<{ ok: boolean; message?: string }>(`${API}/jobs/${jobId}/apply`, {});
+  }
+
+  getAppliedJobs(): Observable<{ jobs: JobListing[] }> {
+    return this.http.get<{ jobs: JobListing[] }>(`${API}/jobs/applied`);
   }
 }
