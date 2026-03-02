@@ -1,7 +1,7 @@
 {
   "name": "linkedin-bot-backend",
   "version": "1.0.0",
-  "description": "LinkedIn messaging bot backend with Playwright",
+  "description": "LinkedIn bot backend with Playwright",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
