@@ -1010,7 +1010,8 @@ export async function getLastMessages(count: number): Promise<ThreadMessage[]> {
         const cls = (el.className || '') + ' ' + (el.closest('[class*="msg"]')?.className || '');
         if (/outbound|sent|outgoing|from-self|fromme/i.test(cls)) return true;
         
-        // Check for "Joseph Beyer" in sender/metadata elements
+        // Check for current user's display name in sender/metadata (configurable via MY_DISPLAY_NAME env)
+        const myName = process.env.MY_DISPLAY_NAME || '';
         const senderSelectors = [
           '[class*="sender"]',
           '[class*="author"]',
@@ -1020,21 +1021,20 @@ export async function getLastMessages(count: number): Promise<ThreadMessage[]> {
           '[class*="name"]',
         ];
         
-        for (const sel of senderSelectors) {
-          const senderEl = el.querySelector(sel) || el.closest('[class*="msg"], li, [role="listitem"]')?.querySelector(sel);
-          if (senderEl && /Joseph\s+Beyer/i.test(senderEl.textContent || '')) {
-            return true;
+        if (myName) {
+          const namePattern = new RegExp(myName.replace(/\s+/g, '\\s+'), 'i');
+          for (const sel of senderSelectors) {
+            const senderEl = el.querySelector(sel) || el.closest('[class*="msg"], li, [role="listitem"]')?.querySelector(sel);
+            if (senderEl && namePattern.test(senderEl.textContent || '')) {
+              return true;
+            }
           }
-        }
-        
-        // Fallback: check if "Joseph Beyer" appears near timestamp in the item
-        const parent = el.closest('[class*="msg"], li, [role="listitem"]');
-        if (parent) {
-          const allText = parent.textContent || '';
-          // If "Joseph Beyer" appears within 100 chars of a time indicator, likely it's the sender
-          if (/Joseph\s+Beyer.{0,100}(?:\d{1,2}:\d{2}|AM|PM|ago)/i.test(allText) || 
-              /(?:\d{1,2}:\d{2}|AM|PM|ago).{0,100}Joseph\s+Beyer/i.test(allText)) {
-            return true;
+          const parent = el.closest('[class*="msg"], li, [role="listitem"]');
+          if (parent) {
+            const allText = parent.textContent || '';
+            if (namePattern.test(allText)) {
+              return true;
+            }
           }
         }
         

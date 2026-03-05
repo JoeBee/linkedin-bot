@@ -17,10 +17,6 @@ botRouter.get('/status', (_req, res) => {
   res.json(getState());
 });
 
-botRouter.get('/diagnostics', (_req, res) => {
-  res.json(getDiagnostics());
-});
-
 botRouter.post('/login', async (req, res) => {
   const { email, password, headless } = req.body || {};
   if (!email || !password) {

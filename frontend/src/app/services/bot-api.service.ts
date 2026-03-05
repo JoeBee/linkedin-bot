@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
-const API = 'http://localhost:3000/api';
+const API = environment.apiUrl;
 
 export interface BotState {
   status: 'idle' | 'logging_in' | 'ready' | 'error';
@@ -70,10 +71,6 @@ export class BotApiService {
       `${API}/bot/conversations/refresh`,
       {}
     );
-  }
-
-  getDiagnostics(): Observable<RefreshDiagnostics> {
-    return this.http.get<RefreshDiagnostics>(`${API}/bot/diagnostics`);
   }
 
   openConversation(id: string): Observable<{ ok: boolean; messages?: Array<{ text: string; timestamp?: string; fromMe?: boolean }> }> {

@@ -1,0 +1,7 @@
+// Copy this file to environment.local.ts for local dev overrides.
+// environment.local.ts is gitignored - never commit credentials.
+
+export const environmentLocal = {
+  defaultEmail: '',
+  defaultPassword: '',
+};

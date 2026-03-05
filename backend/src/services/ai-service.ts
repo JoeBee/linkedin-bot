@@ -1,6 +1,5 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize with proper configuration
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export interface ConversationMessage {
@@ -13,9 +12,6 @@ export async function generateReply(
   conversationHistory: ConversationMessage[],
   recipientName: string
 ): Promise<string> {
-  console.log('[AI Service] GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
-  console.log('[AI Service] GEMINI_API_KEY prefix:', process.env.GEMINI_API_KEY?.substring(0, 15) + '...');
-
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY not configured in environment');
   }

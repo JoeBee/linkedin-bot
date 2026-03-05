@@ -9,8 +9,7 @@ import {
   JobListing,
 } from './services/bot-api.service';
 
-// Import credentials from local environment file
-import { environmentLocal } from '../environments/environment.local';
+import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
@@ -21,8 +20,8 @@ import { environmentLocal } from '../environments/environment.local';
 })
 export class AppComponent {
   state: BotState = { status: 'idle', conversations: [], jobs: [] };
-  email = environmentLocal.defaultEmail;
-  password = environmentLocal.defaultPassword;
+  email = environment.defaultEmail;
+  password = environment.defaultPassword;
   passwordVisible = false;
   headless = true;
   messageText = '';
@@ -194,9 +193,6 @@ export class AppComponent {
     });
 
     if (contact) {
-      console.log('[Auto-select] Found contact:', contact.name);
-      console.log('[Auto-select] Opening conversation to check if auto-generate is needed...');
-
       // Open the conversation
       this.error = '';
       this.success = '';
@@ -221,11 +217,7 @@ export class AppComponent {
             const mostRecentMessage = this.threadMessages[this.threadMessages.length - 1];
             const isFromContact = !mostRecentMessage.fromMe;
 
-            console.log('[Auto-select] Most recent message fromMe:', mostRecentMessage.fromMe);
-            console.log('[Auto-select] Is from contact:', isFromContact);
-
             if (isFromContact) {
-              console.log(`[Auto-select] Most recent message is from ${contact.name} - auto-generating AI reply...`);
               this.success = `Opened conversation with ${contact.name}. Auto-generating reply...`;
 
               // Small delay to ensure UI is updated
@@ -233,21 +225,16 @@ export class AppComponent {
                 this.generateAiReply();
               }, 500);
             } else {
-              console.log('[Auto-select] Most recent message is from me - skipping auto-generate');
               this.success = `Opened conversation with ${contact.name}. Last message was from you.`;
             }
           }
         },
         error: (err) => {
-          console.log('[Auto-select] Error opening conversation:', err);
           this.error = err?.error?.error || 'Failed to open';
           this.statusMessage = 'Error loading messages';
           this.loading = false;
         },
       });
-    } else {
-      console.log(`[Auto-select] Contact "${firstName} ${lastName}" not found in conversations`);
-      console.log('[Auto-select] Available conversations:', this.state.conversations.map(c => c.name).join(', '));
     }
   }
 
@@ -410,21 +397,16 @@ export class AppComponent {
   }
 
   generateAiReply(): void {
-    console.log('[generateAiReply] Called! Selected:', this.selectedConversation?.name, 'Messages:', this.threadMessages.length);
-
     if (!this.selectedConversation) {
-      console.log('[generateAiReply] ❌ No conversation selected');
       this.error = 'No conversation selected';
       return;
     }
 
     if (this.threadMessages.length === 0) {
-      console.log('[generateAiReply] ❌ No messages to analyze');
       this.error = 'No messages to analyze';
       return;
     }
 
-    console.log('[generateAiReply] ✅ Starting AI generation...');
     this.error = '';
     this.success = '';
     this.loading = true;
@@ -435,7 +417,6 @@ export class AppComponent {
       this.selectedConversation.name
     ).subscribe({
       next: (res) => {
-        console.log('[generateAiReply] ✅ AI reply received:', res.reply.substring(0, 50) + '...');
         this.messageText = res.reply;
         this.success = 'AI reply generated! Review and edit before sending.';
         this.statusMessage = `AI reply generated for ${this.selectedConversation?.name}`;
@@ -447,7 +428,6 @@ export class AppComponent {
         this.textareaRows = estimatedLines;
       },
       error: (err) => {
-        console.log('[generateAiReply] ❌ Error:', err);
         this.error = err?.error?.error || 'Failed to generate AI reply';
         this.statusMessage = 'AI generation failed';
         this.loading = false;
